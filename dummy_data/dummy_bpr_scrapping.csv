@@ -1,0 +1,4 @@
+waktu_diambil,tahun,bulan,nama_provinsi,nama_kota,sandi,nama,asset,kyd,total_hutang,laba_tahun_lalu,laba_saat_ini,npl_net,kpmm,ldr,roa,kap,ppap,bopo,cr,direksi,dewan_komisaris
+5/26/2025 4:35,2023,Januari,Jawa Barat,Bandung,BP01,BPR ABC,10000000000,2000000000,15000000000,500000000,600000000,2.5,15.5,80.2,5.1,50.5,300000000,75.5,1.2,"John Doe, Jane Smith","Robert Johnson, Mary Williams"
+5/26/2025 4:35,2023,Februari,DKI Jakarta,Jakarta Selatan,BP02,BPR XYZ,12000000000,2500000000,18000000000,450000000,500000000,3,16.2,85.5,4.5,55.2,350000000,78.2,1.3,"Alice Chen, Bob Wilson","David Lee, Sarah Brown"
+5/26/2025 4:37,2024,Maret,Jawa Barat,Bandung,BP03,BPR XYZZ,12000000000,2500000000,18000000000,450000000,500000000,3,16.2,85.5,4.5,55.2,350000000,78.2,1.3,"Alice Chen, Bob Wilson","David Lee, Sarah Brown"

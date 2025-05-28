@@ -1,0 +1,73 @@
+{
+    "pagination": {
+        "current_page": 1,
+        "total_pages": 2,
+        "total_records": 7,
+        "per_page": 5
+    },
+    "data": {
+        "bpr_scrapping": {
+            "current_page": 1,
+            "total_pages": 1,
+            "total_records": 2,
+            "per_page": 5,
+            "records": [
+                {
+                    "waktu_diambil": "2025-05-26 03:33:24",
+                    "tahun": 2023,
+                    "bulan": "Januari",
+                    "nama_provinsi": "Jawa Barat",
+                    "nama_kota": "Bandung",
+                    "sandi": "BP01",
+                    "nama": "BPR ABC",
+                    "asset": 10000000000,
+                    "kyd": 2000000000,
+                    "total_hutang": 15000000000,
+                    "laba_tahun_lalu": 500000000,
+                    "laba_saat_ini": 600000000,
+                    "npl_net": 2.5,
+                    "kpmm": 15.5,
+                    "ldr": 80.2
+                }
+            ]
+        },
+        "bpr_lainnya": {
+            "current_page": 1,
+            "total_pages": 1,
+            "total_records": 1,
+            "per_page": 5,
+            "records": [
+                {
+                    "nama": "BPR DEF",
+                    "alamat": "Jl. Raya No. 123",
+                    "kota": "Jakarta",
+                    "provinsi": "DKI Jakarta",
+                    "telepon": "021-5551234",
+                    "email": "bprdef@example.com",
+                    "website": "www.bprdef.com",
+                    "npwp": "12.345.678.9-012.345",
+                    "bentuk_badan_hukum": "PT",
+                    "tanggal_beroperasi": "1995-03-15"
+                }
+            ]
+        },
+        "d_entity": {
+            "current_page": 1,
+            "total_pages": 1,
+            "total_records": 1,
+            "per_page": 5,
+            "records": [
+                {
+                    "nama": "John Doe",
+                    "jabatan": "Direktur Utama",
+                    "tanggal_mulai": "2020-01-01",
+                    "tanggal_berakhir": "2025-12-31",
+                    "status": "Aktif",
+                    "pendidikan": "S2",
+                    "pengalaman": "15 tahun",
+                    "sertifikasi": "Level 1, Level 2"
+                }
+            ]
+        }
+    }
+}
