@@ -8,7 +8,11 @@ load_dotenv()
 
 # Use SQLite instead of PostgreSQL
 # DATABASE_URL = "sqlite:///./bpr.db"
-DATABASE_URL = "postgresql://postgres:1234@localhost:5432/bpr_db"
+# DATABASE_URL = "postgresql://postgres:Khoi2000@localhost:5432/bpr_db"
+
+
+# Akses variabel menggunakan os.getenv()
+DATABASE_URL= os.getenv("DATABASE_URL")
 
 
 try:
@@ -46,3 +50,4 @@ def get_db():
         raise
     finally:
         db.close()
+

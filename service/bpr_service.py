@@ -3,10 +3,10 @@ from typing import List, Dict, Any, Optional
 from werkzeug.utils import secure_filename
 from sqlalchemy.orm import Session
 from datetime import datetime
-
-from object.models import BprScrapping, BprLainnya, D
+from utils.pagination import paginate
+from object.models import BprScrapping, BprLainnya, RAC, BprLabeled
 from csv_to_db.csv_parser import parse_bpr_scrapping_csv
-from csv_to_db.xlsx_parser import parse_bpr_lainnya_xlsx, parse_d_xlsx
+from csv_to_db.xlsx_parser import parse_bpr_lainnya_xlsx, parse_rac_xlsx
 
 UPLOAD_FOLDER = {
     'bpr_scrapping': "asset/bpr_scrapping",
@@ -42,21 +42,26 @@ def process_bpr_scrapping(db: Session, file) -> Dict[str, str]:
     Raises:
         ValueError: If file processing fails
     """
-    if not allowed_file_csv(file.filename):
-        raise ValueError("Invalid file type. Only CSV files are allowed.")
+    # if not allowed_file_csv(file.filename):
+    #     raise ValueError("Invalid file type. Only CSV files are allowed.")
     
     ensure_upload_folders()
+    print("FILEE ",file)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"{timestamp}_{secure_filename(file.filename)}"
-    file_path = os.path.join(UPLOAD_FOLDER['bpr_scrapping'], filename)
+    file_path = file.name
     
     try:
-        file.save(file_path)
+        # file.save(file_path)
         data_list = parse_bpr_scrapping_csv(file_path)
-        
+
         for data in data_list:
+            # print("DATAA: ", data)
+            status=cek_kesehatan_bpr(data['npl_net'], data['laba_tahun_lalu'], data['laba_saat_ini'], data['kap'], data['kpmm'], data['asset_saat_ini'], data['roa'], data['bopo'])
+            print(status)
             bpr_scrapping = BprScrapping(**data)
+            bpr_labeled = BprLabeled(**data, status=status)
             db.add(bpr_scrapping)
+            db.add(bpr_labeled)
         
         db.commit()
         return {"status": "success", "message": "File bpr_scrapping.csv uploaded and data saved."}
@@ -106,7 +111,7 @@ def process_bpr_lainnya(db: Session, file) -> Dict[str, str]:
     finally:
         pass  # Keep the file in the folder
 
-def process_d_data(db: Session, file) -> Dict[str, str]:
+def process_rac_data(db: Session, file) -> Dict[str, str]:
     """
     Process D entity XLSX file
     
@@ -126,46 +131,94 @@ def process_d_data(db: Session, file) -> Dict[str, str]:
     ensure_upload_folders()
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"{timestamp}_{secure_filename(file.filename)}"
-    file_path = os.path.join(UPLOAD_FOLDER['d'], filename)
+    file_path = os.path.join(UPLOAD_FOLDER['rac'], filename)
     
     try:
         file.save(file_path)
-        data_list = parse_d_xlsx(file_path)
+        data_list = parse_rac_xlsx(file_path)
         
         for data in data_list:
-            d_entity = D(**data)
-            db.add(d_entity)
+            rac_entity = RAC(**data)
+            db.add(rac_entity)
         
         db.commit()
-        return {"status": "success", "message": "D entity data saved successfully."}
+        return {"status": "success", "message": "RAC entity data saved successfully."}
         
     except Exception as e:
         db.rollback()
-        raise ValueError(f"Error processing D entity file: {str(e)}")
+        raise ValueError(f"Error processing RAC entity file: {str(e)}")
     finally:
         pass  # Keep the file in the folder
 
+def cek_kesehatan_bpr(npl, laba_sebelum, laba_sekarang, kap, kpmm, asset, roa, bopo) -> str:
+    total_skor = 0
+
+    # NPL < 5.00%
+    if npl < 0.05: 
+        total_skor += 10
+
+    # Laba 21 >= 1
+    if laba_sebelum >= 1:
+        total_skor += 10
+
+    # Laba Jun 22 >= 1
+    if laba_sekarang >= 1:
+        total_skor += 10
+
+    # KAP < 10.35%
+    if kap < 0.1035: 
+        total_skor += 10
+
+    # KPMM >= 12.00%
+    if kpmm >= 0.12:
+        total_skor += 10
+
+    # Asset >= 1
+    if asset >= 1:
+        total_skor += 10
+
+    # ROA >= 0.10%
+    if roa >= 0.001: # 0.10% = 0.001 dalam bentuk desimal
+        total_skor += 10
+
+    # BOPO < 95.00%
+    if bopo < 0.95: # 95.00% = 0.95 dalam bentuk desimal
+        total_skor += 10
+
+    # Penentuan Kesehatan
+    if total_skor >= 80:
+        return "SEHAT"
+    else:
+        return "TIDAK SEHAT"
+
+
 # Query functions
 def get_all_bpr_scrapping(db: Session, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
-    from utils.pagination import paginate
     query = db.query(BprScrapping)
     return paginate(query, page=page, per_page=per_page)
 
 def get_bpr_scrapping_detail(db: Session, bpr_id: int) -> Optional[BprScrapping]:
     return db.query(BprScrapping).filter(BprScrapping.id == bpr_id).first()
 
+def get_all_bpr_labeled(db: Session, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
+    query = db.query(BprLabeled)
+    print(query)
+    return paginate(query, page=page, per_page=per_page)
+
+def get_bpr_labeled_detail(db: Session, bpr_id: int) -> Optional[BprLabeled]:
+    return db.query(BprLabeled).filter(BprLabeled.id == bpr_id).first()
+
 def get_all_bpr_lainnya(db: Session, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
-    from utils.pagination import paginate
     query = db.query(BprLainnya)
     return paginate(query, page=page, per_page=per_page)
 
 def get_bpr_lainnya_detail(db: Session, bpr_id: int) -> Optional[BprLainnya]:
     return db.query(BprLainnya).filter(BprLainnya.id == bpr_id).first()
 
-def get_all_d(db: Session, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
-    from utils.pagination import paginate
-    query = db.query(D)
+def get_all_rac(db: Session, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
+    query = db.query(RAC)
     return paginate(query, page=page, per_page=per_page)
 
-def get_d_detail(db: Session, d_id: int) -> Optional[D]:
-    return db.query(D).filter(D.id == d_id).first()
+def get_rac_detail(db: Session, rac_id: int) -> Optional[RAC]:
+    return db.query(RAC).filter(RAC.id == rac_id).first()
+

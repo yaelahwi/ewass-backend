@@ -94,3 +94,5 @@ def get_detail(bpr_id: int):
         
     except Exception as e:
         return jsonify({"status": "error", "message": "Internal server error"}), 500
+
+

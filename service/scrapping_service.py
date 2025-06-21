@@ -18,6 +18,8 @@ from rich import print as rprint
 from rich.tree import Tree
 from rich.live import Live
 from rich.table import Table
+from database import SessionLocal
+from object.models import BprLainnya
 
 # Configure logging to file instead of console
 os.makedirs('logs', exist_ok=True)
@@ -53,18 +55,18 @@ def log_worker():
 def data_writer_worker():
     """Worker to handle ordered data writing to CSV"""
     current_date = datetime.now().strftime('%Y%m%d')
-    with open(f'data/data{current_date}.csv', 'w', newline='', encoding='utf-8') as csvfile:
+    with open(f'asset/bpr_scrapping/data{current_date}.csv', 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         headers = [
-            'Waktu Diambil', 'Tahun', 'Bulan', 'Nama Provinsi', 'Nama Kota', 'Nama Bank',
-            'Total Aset Saat Ini', 'Total Aset Tahun Sebelumnya',
-            'Kredit yang Diberikan Saat Ini', 'Kredit yang Diberikan Tahun Sebelumnya',
-            'Total Hutang Saat Ini', 'Total Hutang Tahun Sebelumnya',
-            'Laba (Rugi) Tahun-tahun Lalu Saat Ini', 'Laba (Rugi) Tahun-tahun Lalu Tahun Sebelumnya',
-            'Laba (Rugi) Tahun Berjalan Saat Ini', 'Laba (Rugi) Tahun Berjalan Tahun Sebelumnya', 'Tabungan Saat ini', 'Tabungan Tahun Sebelumnya',
-            'Deposito Saat Ini', 'Deposito Tahun Sebelumnya',
-            'NPL (neto)','KPMM','KAP', 'PPAP', 'ROA', 'Cash Ratio', 'LDR', 'BOPO', 'NIM'
-            'Direksi', 'Dewan Komisaris'
+            'waktu_diambil', 'tahun', 'bulan', 'nama_provinsi', 'nama_kota', 'sandi', 'nama',
+            'asset_saat_ini','asset_tahun_lalu','kyd_saat_ini','kyd_tahun_lalu','hutang_saat_ini',
+            'hutang_tahun_lalu','laba_tahun_tahun_lalu_saat_ini','laba_tahun_tahun_lalu_sebelumnya',
+            'laba_saat_ini','laba_tahun_lalu','tabungan_saat_ini','tabungan_tahun_lalu','deposito_saat_ini',
+            'deposito_tahun_lalu','penempatan_pada_bank_lain_saat_ini','penempatan_pada_bank_lain_tahun_lalu',
+            'total_ekuitas','total_ekuitas_tahun_lalu','simpanan_dari_bank_lain_saat_ini',
+            'simpanan_dari_bank_lain_tahun_lalu','npl_net','kpmm','ldr','roa','kap','ppap',
+            'bopo','nim','cr',
+            'direksi', 'dewan_komisaris'
         ]
         writer.writerow(headers)
         while True:
@@ -79,37 +81,6 @@ class ThreadSafeLogger:
     def __init__(self, logger): self.logger = logger
     def info(self, msg): pass  # Suppress info logs
     def error(self, msg): pass  # Suppress error logs
-
-def setup_driver():
-    """Set up Chrome WebDriver with headless options"""
-    chrome_options = Options()
-    for arg in ['--headless', '--no-sandbox', '--disable-dev-shm-usage', 
-               '--window-size=1920,1080', '--disable-gpu', '--disable-extensions']:
-        chrome_options.add_argument(arg)
-    return webdriver.Chrome(options=chrome_options)
-
-def wait_and_click(driver, by, value, timeout=10):
-    """Wait for element and click it"""
-    try:
-        element = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, value)))
-        driver.execute_script("arguments[0].scrollIntoView(true);", element)
-        time.sleep(3)
-        element.click()
-        return element
-    except Exception:
-        return None
-
-def click_dropdown_trigger(driver, dropdown_id, timeout=10):
-    """Click dropdown trigger element"""
-    try:
-        trigger = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, f"#{dropdown_id}-triggerWrap .x-form-trigger")))
-        driver.execute_script("arguments[0].scrollIntoView(true);", trigger)
-        time.sleep(3)
-        trigger.click()
-        return trigger
-    except Exception:
-        return None
 
 def extract_direksi_komisaris(html):
     """Extract Direksi and Dewan Komisaris from correct table in HTML"""
@@ -166,7 +137,7 @@ def get_report_data(base_url, report_url, province_name, city_name, bank_name, y
         
         response = requests.get(report_url, timeout=30)
         response.raise_for_status()
-        print(report_url)
+        # print(report_url)
          # Management data extraction
         direksi, komisaris ='', ''
         # Financial data extraction
@@ -189,6 +160,9 @@ def get_report_data(base_url, report_url, province_name, city_name, bank_name, y
                     'Laba (Rugi) Tahun Berjalan': {'current': '', 'previous': ''},
                     'Tabungan': {'current': '', 'previous': ''},
                     'Deposito': {'current': '', 'previous': ''},
+                    'Penempatan pada Bank Lain': {'current': '', 'previous': ''},
+                    'Total Ekuitas': {'current': '', 'previous': ''},
+                    'Simpanan dari Bank Lain':{'current': '', 'previous': ''}
                     }
        
         if 'BPK-901-000005' in report_url:
@@ -198,7 +172,7 @@ def get_report_data(base_url, report_url, province_name, city_name, bank_name, y
         # Process financial data from HTML tables
         soup = BeautifulSoup(response.text, 'html.parser')
         clean_value = lambda val: ('' if not val or val == '&nbsp;' else 
-                                  (('-' + val[1:-1]) if val.startswith('(') and val.endswith(')') 
+                                  (('-' + val[1:-1]).replace('\xa0', '').replace(',', '').replace(' ', '') if val.startswith('(') and val.endswith(')') 
                                    else val.replace('\xa0', '').replace(',', '').replace(' ', '')))
         
         for tr in soup.find_all('tr', valign='top'):
@@ -210,29 +184,38 @@ def get_report_data(base_url, report_url, province_name, city_name, bank_name, y
                 label_clean = re.sub(r'^[a-z0-9]\.\s*', '', label.replace('-/-', '')).strip()
                 
                 raw3, raw4 = tds[2].get_text(strip=True), tds[3].get_text(strip=True)
-                raw3=raw3+"000"
-                raw4=raw4+"000"
+                clean_raw3=clean_value(raw3)+"000"
+                clean_raw4=clean_value(raw4)+"000"
                 if label_clean == 'Total Aset':
-                    extracted['Total Aset']['current'] = clean_value(raw3)
-                    extracted['Total Aset']['previous'] = clean_value(raw4)
+                    extracted['Total Aset']['current'] = clean_raw3
+                    extracted['Total Aset']['previous'] = clean_raw4
                 elif label_clean == 'Jumlah':
-                    extracted['Kredit yang Diberikan']['current'] = clean_value(raw3)
-                    extracted['Kredit yang Diberikan']['previous'] = clean_value(raw4)
+                    extracted['Kredit yang Diberikan']['current'] = clean_raw3
+                    extracted['Kredit yang Diberikan']['previous'] = clean_raw4
                 elif label_clean == 'Total Liabilitas':
-                    extracted['Total Hutang']['current'] = clean_value(raw3)
-                    extracted['Total Hutang']['previous'] = clean_value(raw4)
+                    extracted['Total Hutang']['current'] = clean_raw3
+                    extracted['Total Hutang']['previous'] = clean_raw4
                 elif label_clean == 'Tahun-tahun Lalu':
-                    extracted['Laba (Rugi) Tahun-tahun Lalu']['current'] = clean_value(raw3)
-                    extracted['Laba (Rugi) Tahun-tahun Lalu']['previous'] = clean_value(raw4)
+                    extracted['Laba (Rugi) Tahun-tahun Lalu']['current'] = clean_raw3
+                    extracted['Laba (Rugi) Tahun-tahun Lalu']['previous'] = clean_raw4
                 elif label_clean == 'Tahun Berjalan':
-                    extracted['Laba (Rugi) Tahun Berjalan']['current'] = clean_value(raw3)
-                    extracted['Laba (Rugi) Tahun Berjalan']['previous'] = clean_value(raw4)
+                    extracted['Laba (Rugi) Tahun Berjalan']['current'] = clean_raw3
+                    extracted['Laba (Rugi) Tahun Berjalan']['previous'] = clean_raw4
                 elif 'tabungan' in label_clean.lower():
-                    extracted['Tabungan']['current'] = clean_value(raw3)
-                    extracted['Tabungan']['previous'] = clean_value(raw4)
+                    extracted['Tabungan']['current'] = clean_raw3
+                    extracted['Tabungan']['previous'] = clean_raw4
                 elif 'deposito' in label_clean.lower():
-                    extracted['Deposito']['current'] = clean_value(raw3)
-                    extracted['Deposito']['previous'] = clean_value(raw4)
+                    extracted['Deposito']['current'] = clean_raw3
+                    extracted['Deposito']['previous'] = clean_raw4
+                elif 'penempatan pada bank lain' in label_clean.lower():
+                    extracted['Penempatan pada Bank Lain']['current'] = clean_raw3
+                    extracted['Penempatan pada Bank Lain']['previous'] = clean_raw4
+                elif 'total ekuitas' in label_clean.lower():
+                    extracted['Total Ekuitas']['current'] = clean_raw3
+                    extracted['Total Ekuitas']['previous'] = clean_raw4
+                elif 'simpanan dari bank lain' in label_clean.lower():
+                    extracted['Simpanan dari Bank Lain']['current'] = clean_raw3
+                    extracted['Simpanan dari Bank Lain']['previous'] = clean_raw4
                 
             elif 'BPK-901-000003' in report_url:
                 tds = tr.find_all('td')
@@ -262,7 +245,7 @@ def get_report_data(base_url, report_url, province_name, city_name, bank_name, y
                 elif 'nim' in label_clean.lower():
                     extracted_kap['NIM'] = clean_value(raw6)
 
-                print(extracted_kap)
+                # print(extracted_kap)
         return extracted, extracted_kap, direksi, komisaris
     except Exception as e:
         print(f"Error occurred: {e}")
@@ -282,123 +265,8 @@ def update_bank_progress(province_name, city_name, bank_name, completed=False):
             bank_progress[province_name][city_name]['current'] = bank_name
             if bank_name not in bank_progress[province_name][city_name]:
                 bank_progress[province_name][city_name]['total'] += 1
-        print(bank_progress)
 
-def get_bank_data(driver, city_name):
-    """Get bank data for a specific city"""
-    banks = []
-    try:
-        click_dropdown_trigger(driver, "BankCode")
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "#treeview-1021-body")))
-        time.sleep(4)
-        bank_elements = driver.find_elements(By.CSS_SELECTOR, "#treeview-1021-body tr.x-grid-row")
-        
-        for bank_element in bank_elements:
-            try:
-                bank_text = bank_element.find_element(By.CSS_SELECTOR, "span.x-tree-node-text").text
-                if bank_text and "-" in bank_text:
-                    banks.append({
-                        "BankCode": bank_text.split("-")[0].strip(),
-                        "BankName": bank_text
-                    })
-            except Exception:
-                pass
-        
-        ActionChains(driver).move_by_offset(0, 0).click().perform()
-        time.sleep(3)
-    except Exception:
-        pass
-    
-    return banks
 
-def update_city_progress(province_name, city_name, completed=False):
-    """Update progress for a specific city"""
-    with progress_lock:
-        if province_name not in city_progress:
-            city_progress[province_name] = {'total': 0, 'completed': 0, 'current': city_name}
-        
-        if completed:
-            city_progress[province_name]['completed'] += 1
-        else:
-            city_progress[province_name]['current'] = city_name
-            city_progress[province_name]['total'] += 1
-
-def get_province_data(driver, province_name, province_code):
-    """Get city and bank data for a specific province"""
-    try:
-        url = "https://cfs.ojk.go.id/cfs/Report.aspx?BankTypeCode=BPK&BankTypeName=BPR+Konvensional"
-        driver.get(url)
-        time.sleep(7)
-        
-        click_dropdown_trigger(driver, "ProvinceCode")
-        time.sleep(4)
-        
-        wait_and_click(driver, By.XPATH, f"//li[contains(@class, 'x-boundlist-item') and contains(text(), '{province_name}')]")
-        time.sleep(5)
-        
-        click_dropdown_trigger(driver, "CityCode")
-        time.sleep(4)
-        
-        cities = []
-        city_elements = driver.find_elements(By.CSS_SELECTOR, "li.x-boundlist-item")
-        total_cities = len([c for c in city_elements if c.text and "Provinsi" not in c.text])
-        
-        processed_cities = 0
-        for city_element in city_elements:
-            city_name = city_element.text
-            if city_name and "Provinsi" not in city_name:
-                update_city_progress(province_name, city_name)
-                city_element.click()
-                time.sleep(5)
-                
-                banks = get_bank_data(driver, city_name)
-                cities.append({
-                    "CityCode": f"DATI{province_code}",
-                    "CityName": city_name,
-                    "Bank": banks
-                })
-                
-                processed_cities += 1
-                update_city_progress(province_name, city_name, completed=True)
-                
-                click_dropdown_trigger(driver, "CityCode")
-                time.sleep(4)
-        
-        return {
-            "ProvinceCode": f"DATI{province_code}",
-            "ProvinceName": province_name,
-            "City": cities
-        }
-    except Exception:
-        return None
-
-def update_province_progress(province_name, completed=False):
-    """Update progress for a specific province"""
-    with progress_lock:
-        if province_name not in province_progress:
-            province_progress[province_name] = {'completed': False, 'current': True}
-        
-        if completed:
-            province_progress[province_name]['completed'] = True
-        else:
-            province_progress[province_name]['current'] = True
-
-def process_province(province_info):
-    """Process a province with own WebDriver instance"""
-    province_name, province_code = province_info
-    thread_logger = ThreadSafeLogger(logger)
-    
-    update_province_progress(province_name)
-    
-    driver = setup_driver()
-    try:
-        province_data = get_province_data(driver, province_name, province_code)
-        update_province_progress(province_name, completed=True)
-        return province_data
-    except Exception:
-        return None
-    finally:
-        driver.quit()
 
 def process_bank(bank_info, progress, bank_task_id):
     """Process data for a single bank"""
@@ -479,9 +347,11 @@ def process_bank(bank_info, progress, bank_task_id):
 
             if data_found and data_found_kap:
                 # Prepare and save data row
-                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                current_time = datetime.now().isoformat(timespec='microseconds')
+                sandi = bank['BankName'].split('-')[0].strip()
+                nama = bank['BankName'].split('-')[1].strip()
                 row_data = [
-                    current_time, year, month['text'], province['ProvinceName'], city['CityName'], bank['BankName'],
+                    current_time, year, month['text'], province['ProvinceName'], city['CityName'], sandi, nama,
                     extracted_main['Total Aset']['current'] or '0', extracted_main['Total Aset']['previous'] or '0',
                     extracted_main['Kredit yang Diberikan']['current'] or '0', extracted_main['Kredit yang Diberikan']['previous'] or '0',
                     extracted_main['Total Hutang']['current'] or '0', extracted_main['Total Hutang']['previous'] or '0',
@@ -489,10 +359,12 @@ def process_bank(bank_info, progress, bank_task_id):
                     extracted_main['Laba (Rugi) Tahun Berjalan']['current'] or '0', extracted_main['Laba (Rugi) Tahun Berjalan']['previous'] or '0',
                     extracted_main['Tabungan']['current'] or '0', extracted_main['Tabungan']['previous'] or '0',
                     extracted_main['Deposito']['current'] or '0', extracted_main['Deposito']['previous'] or '0',
-                    extracted_kap['NPL (neto)'] or '0',extracted_kap['KPMM'] or '0',extracted_kap['KAP'] or '0',
-                    extracted_kap['PPAP'] or '0', extracted_kap['ROA'] or '0', extracted_kap['Cash Ratio'] or '0',
-                    extracted_kap['LDR'] or '0', extracted_kap['BOPO'] or '0', extracted_kap['NIM'] or '0',
-                    direksi, komisaris
+                    extracted_main['Penempatan pada Bank Lain']['current'] or '0', extracted_main['Penempatan pada Bank Lain']['previous'] or '0',
+                    extracted_main['Total Ekuitas']['current'] or '0', extracted_main['Total Ekuitas']['previous'] or '0',
+                    extracted_main['Simpanan dari Bank Lain']['current'] or '0', extracted_main['Simpanan dari Bank Lain']['previous'] or '0',
+                    extracted_kap['NPL (neto)'] or '0',extracted_kap['KPMM'] or '0', extracted_kap['LDR'] or '0',extracted_kap['ROA'] or '0', 
+                    extracted_kap['KAP'] or '0', extracted_kap['PPAP'] or '0', extracted_kap['BOPO'] or '0', 
+                    extracted_kap['NIM'] or '0', extracted_kap['Cash Ratio'] or '0', direksi, komisaris
                 ]
                 data_queue.put(row_data)
 
@@ -504,15 +376,49 @@ def process_bank(bank_info, progress, bank_task_id):
         update_bank_progress(province['ProvinceName'], city['CityName'], bank['BankName'], completed=True)
         progress.update(bank_task_id, advance=1)
         
-    except Exception:
+    except Exception as e:
         update_bank_progress(province['ProvinceName'], city['CityName'], bank['BankName'], completed=True)
         progress.update(bank_task_id, advance=1)
+        print(e)
+
+def get_bpr_lainnya_data():
+    db = SessionLocal()
+    try:
+        rows = db.query(BprLainnya).all()
+        if not rows:
+            return None
+
+        data_by_provinsi = {}
+        for row in rows:
+            provinsi = row.provinsi
+            kota = row.kota_kabupaten
+            bank = {
+                'BankCode': row.sandi,
+                'BankName': row.nama_bpr,
+            }
+
+            data_by_provinsi.setdefault(provinsi, {})
+            data_by_provinsi[provinsi].setdefault(kota, []).append(bank)
+
+        structured_data = []
+        for provinsi, cities in data_by_provinsi.items():
+            structured_data.append({
+                "ProvinceName": provinsi,
+                "ProvinceCode": "0",
+                "City": [{"CityName": kota,"CityCode":"0", "Bank": banks} for kota, banks in cities.items()]
+            })
+
+        return structured_data
+    finally:
+        db.close()
 
 
-def process_bank_data(current_month, current_year):
+def process_bank_data(current_month, current_year, data_writer_thread):
     """Process bank data and collect financial information"""
-    if not os.path.exists('bank_data.json'):
-        console.print("bank_data.json not found, please run the script without this file first")
+    bank_data = get_bpr_lainnya_data()
+    
+    if not bank_data:
+        console.print("[red]Table 'bpr_lainnya' is empty, please insert data first")
         return
     
     # Define months and years to process
@@ -524,10 +430,7 @@ def process_bank_data(current_month, current_year):
     ]
     # month = months[(current_month//3)-1]
     month = months[0]
-    year = 2023
-    
-    with open('bank_data.json', 'r', encoding='utf-8') as f:
-        bank_data = json.load(f)
+    year = 2022
     
     # Setup global progress trackers
     global year_progress, month_progress
@@ -560,114 +463,36 @@ def process_bank_data(current_month, current_year):
                     process_bank(bank_info, progress, bank_task)
                     completed_banks += 1
                     progress.update(bank_task, completed=completed_banks, total=total_banks)
-         
-    
+                    if completed_banks == 3:
+                        break
+                if completed_banks == 3:
+                        break
+            if completed_banks == 3:
+                        break
     # Signal threads to stop
     data_queue.put(None)
     data_writer_thread.join()
 
-def main():
-    console.print("Starting OJK BPR Data Collection")
-    
-    if not os.path.exists('bank_data.json'):
-        # Province data to collect
-        provinces = [
-            ("Provinsi Jawa Barat", "00101", 0),
-            ("Provinsi Banten", "00102", 1),
-            ("Provinsi DKI Jakarta", "00103", 2),
-            ("Provinsi D.I. Yogyakarta", "00104", 3),
-            ("Provinsi Jawa Tengah", "00105", 4),
-            ("Provinsi Jawa Timur", "00106", 5),
-            ("Provinsi Bengkulu", "00107", 6),
-            ("Provinsi Jambi", "00108", 7),
-            ("Provinsi NAD", "00109", 8),
-            ("Provinsi Sumatera Utara", "00110", 9),
-            ("Provinsi Sumatera Barat", "00111", 10),
-            ("Provinsi Riau", "00112", 11),
-            ("Provinsi Sumatera Selatan", "00113", 12),
-            ("Provinsi Kep. Bangka Belitung", "00114", 13),
-            ("Provinsi Kep. Riau", "00115", 14),
-            ("Provinsi Lampung", "00116", 15),
-            ("Provinsi Kalimantan Selatan", "00117", 16),
-            ("Provinsi Kalimantan Barat", "00118", 17),
-            ("Provinsi Kalimantan Timur", "00119", 18),
-            ("Provinsi Kalimantan Tengah", "00120", 19),
-            ("Provinsi Sulawesi Tengah", "00121", 20),
-            ("Provinsi Sulawesi Selatan", "00122", 21),
-            ("Provinsi Sulawesi Utara", "00123", 22),
-            ("Provinsi Gorontalo", "00124", 23),
-            ("Provinsi Sulawesi Barat", "00125", 24),
-            ("Provinsi Sulawesi Tenggara", "00126", 25),
-            ("Provinsi Nusa Tenggara Barat", "00127", 26),
-            ("Provinsi Bali", "00128", 27),
-            ("Provinsi Nusa Tenggara Timur", "00129", 28),
-            ("Provinsi Maluku", "00130", 29),
-            ("Provinsi Papua", "00131", 30),
-            ("Provinsi Maluku Utara", "00132", 31),
-            ("Provinsi Papua Barat", "00133", 32),
-            ("DI LUAR INDONESIA", "00134", 33)
-        ]
-        
-        console.print("Phase 1:Collecting provincial data structure")
-        console.print("This will create bank_data.json with all provinces, cities, and banks")
-        
-        # Initialize progress display
-        with Progress(
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=50),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TextColumn("[cyan]{task.completed}/{task.total}"),
-            TimeRemainingColumn(),
-            console=console
-        ) as progress:
-            province_task = progress.add_task(total=len(provinces), description="get province")
-            
-            # Initialize provinces in progress tracking
-            for province_name, _, _ in provinces:
-                update_province_progress(province_name)
-            
-            # Collect province data sequentially
-            all_data = [None] * len(provinces)
-            completed = 0
-            for province_name, province_code, index in provinces:
-                province_data = process_province((province_name, province_code))
-                if province_data:
-                    all_data[index] = province_data
-                    progress.update(province_task, description=f"{province_name}")
-                else:
-                    progress.update(province_task, description=f"{province_name} - Tidak ada data")
-                
-                completed += 1
-                progress.update(province_task, completed=completed)
-                
-                # Show a progress summary after each province
-                if province_data:
-                    cities = len(province_data.get('City', []))
-                    banks = sum(len(city.get('Bank', [])) for city in province_data.get('City', []))
-                    console.print(f"{province_name}:{cities} kota/kabupaten, {banks} bank")
-                
-            # Filter out None values
-            all_data = [data for data in all_data if data is not None]
-            
-            # Save collected data
-            with open('bank_data.json', 'w', encoding='utf-8') as f:
-                json.dump(all_data, f, indent=2, ensure_ascii=False)
-            
-    
-    else:
+
+def main(logging_thread, data_writer_thread):
+    try:
+        console.print("Starting OJK BPR Data Collection")
         current_month = datetime.now().month
         current_year = datetime.now().year
-        process_bank_data(current_month, current_year)
-    
-    # Signal to stop logging
-    log_queue.put(None)
-    logging_thread.join()
-    
-    console.print(Panel("[bold green]Data collection completed![/bold green]", 
-                      subtitle="Results saved to data.csv"))
+        process_bank_data(current_month, current_year, data_writer_thread)
+        print("sudah selesai")
+        # Signal to stop logging
+        log_queue.put(None)
+        logging_thread.join()
+        
+        console.print("Data collection completed!")
+    except Exception as e:
+        console.print(f"Error: {e}")
+        raise
+
     
 
-def threading():
+def thread_scrapping():
     # Start worker threads
     logging_thread = threading.Thread(target=log_worker, daemon=True)
     data_writer_thread = threading.Thread(target=data_writer_worker, daemon=True)
@@ -675,4 +500,6 @@ def threading():
     data_writer_thread.start()
 
     # Run main process
-    main()
+    main(logging_thread, data_writer_thread)
+
+    return "Scrapping dijalankan"

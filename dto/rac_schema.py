@@ -1,6 +1,6 @@
 from marshmallow import Schema, fields, validate, ValidationError
 
-class DSchema(Schema):
+class RACSchema(Schema):
     id = fields.Int(dump_only=True)
     npl_nett = fields.Float(required=True, validate=validate.Range(min=0))
     laba_tahun = fields.Float(required=True)

@@ -2,15 +2,15 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
 from database import get_db
 from service.bpr_service import (
-    process_d_data,
-    get_all_d,
-    get_d_detail
+    process_rac_data,
+    get_all_rac,
+    get_rac_detail
 )
-from dto.d_schema import DSchema
+from dto.rac_schema import RACSchema
 
-d_bp = Blueprint('d', __name__, url_prefix='/d')
+rac_bp = Blueprint('rac', __name__, url_prefix='/rac')
 
-@d_bp.before_request
+@rac_bp.before_request
 def require_jwt():
     try:
         verify_jwt_in_request()
@@ -27,8 +27,8 @@ def require_jwt():
             "message": str(e)
         }), 401
 
-@d_bp.route('/upload', methods=['POST'])
-def upload_d_data():
+@rac_bp.route('/upload', methods=['POST'])
+def uploarac_rac_data():
     """
     Upload and process D entity XLSX file
     """
@@ -41,7 +41,7 @@ def upload_d_data():
             return jsonify({"status": "error", "message": "No file selected"}), 400
             
         db = next(get_db())
-        result = process_d_data(db, file)
+        result = process_rac_data(db, file)
         return jsonify(result), 200
         
     except ValueError as e:
@@ -49,7 +49,7 @@ def upload_d_data():
     except Exception as e:
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
-@d_bp.route('/', methods=['GET'])
+@rac_bp.route('/', methods=['GET'])
 def get_all():
     """
     Get all D entity records with pagination
@@ -59,33 +59,33 @@ def get_all():
         per_page = request.args.get('per_page', default=10, type=int)
         
         db = next(get_db())
-        paginated_data = get_all_d(db, page=page, per_page=per_page)
+        paginaterac_data = get_all_rac(db, page=page, per_page=per_page)
         
-        schema = DSchema(many=True)
-        paginated_data['results'] = schema.dump(paginated_data['results'])
+        schema = RACSchema(many=True)
+        paginaterac_data['results'] = schema.dump(paginaterac_data['results'])
         
-        return jsonify(paginated_data), 200
+        return jsonify(paginaterac_data), 200
         
     except Exception as e:
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
-@d_bp.route('/<int:d_id>', methods=['GET'])
-def get_detail(d_id: int):
+@rac_bp.route('/<int:rac_id>', methods=['GET'])
+def get_detail(rac_id: int):
     """
     Get D entity detail by ID
     """
     try:
         db = next(get_db())
-        d_entity = get_d_detail(db, d_id)
+        rac_entity = get_rac_detail(db, rac_id)
         
-        if not d_entity:
+        if not rac_entity:
             return jsonify({
                 "status": "error",
-                "message": f"D entity with ID {d_id} not found"
+                "message": f"D entity with ID {rac_id} not found"
             }), 404
             
-        schema = DSchema()
-        result = schema.dump(d_entity)
+        schema = RACSchema()
+        result = schema.dump(rac_entity)
         
         return jsonify({
             "status": "success",

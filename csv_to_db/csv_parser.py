@@ -22,7 +22,6 @@ def parse_bpr_scrapping_csv(file_path: str) -> List[Dict[str, Any]]:
         
         # Convert column names to snake_case if needed
         df.columns = [col.lower().replace(' ', '_') for col in df.columns]
-        
         # Initialize schema
         schema = BprScrappingSchema()
         validated_data = []
@@ -31,15 +30,29 @@ def parse_bpr_scrapping_csv(file_path: str) -> List[Dict[str, Any]]:
         for _, row in df.iterrows():
             # Convert row to dict and prepare data
             data = row.to_dict()
-            
+        
             # Add waktu_diambil if not present
-            if 'waktu_diambil' not in data:
-                data['waktu_diambil'] = datetime.utcnow()
-                
+            data['waktu_diambil'] = datetime.now().isoformat(timespec='microseconds')
+          
+
+            if 'sandi' in data and pd.notna(data['sandi']):
+                data['sandi'] = str(data['sandi'])    
+
+            if pd.isna(data['direksi']):
+                data['direksi'] = ' '
+            
+            if pd.isna(data['dewan_komisaris']):
+                data['dewan_komisaris'] = ' '
+
             # Convert numeric values
-            numeric_fields = ['asset', 'kyd', 'total_hutang', 'laba_tahun_lalu', 
-                            'laba_saat_ini', 'npl_net', 'kpmm', 'ldr', 'roa', 
-                            'kap', 'ppap', 'bopo', 'cr']
+            numeric_fields = ["asset_saat_ini","asset_tahun_lalu","kyd_saat_ini","kyd_tahun_lalu","hutang_saat_ini",
+                              "hutang_tahun_lalu","laba_tahun_tahun_lalu_saat_ini","laba_tahun_tahun_lalu_sebelumnya",
+                              "laba_saat_ini","laba_tahun_lalu","tabungan_saat_ini","tabungan_tahun_lalu",
+                              "deposito_saat_ini","deposito_tahun_lalu","penempatan_pada_bank_lain","penempatan_pada_bank_lain_tahun_lalu",
+                              "total_ekuitas","total_ekuitas_tahun_lalu","simpanan_dari_bank_lain_saat_ini",
+                              "simpanan_dari_bank_lain_tahun_lalu","npl_net","kpmm","ldr","roa","kap","ppap",
+                              "bopo","nim","cr"
+                              ]
             
             for field in numeric_fields:
                 if field in data:

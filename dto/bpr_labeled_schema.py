@@ -1,7 +1,7 @@
 from marshmallow import Schema, fields, validate, ValidationError
 from datetime import datetime
 
-class BprScrappingSchema(Schema):
+class BprLabeledSchema(Schema):
     id = fields.Int(dump_only=True)
     waktu_diambil = fields.DateTime(required=False, load_default=datetime.now)
     tahun = fields.Int(required=True, validate=validate.Range(min=2000, max=9999))
@@ -44,6 +44,7 @@ class BprScrappingSchema(Schema):
     cr = fields.Float(required=True)
     direksi = fields.Str(required=False, allow_none=True)
     dewan_komisaris = fields.Str(required=False,allow_none=True)
+    status = fields.Str(required=True)
 
     class Meta:
         ordered = True

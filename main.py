@@ -7,7 +7,7 @@ from database import Base, engine
 from utils.jwt_utils import blacklisted_tokens
 from controller.bpr_scrapping import bpr_scrapping_bp
 from controller.bpr_lainnya import bpr_lainnya_bp
-from controller.d import d_bp
+from controller.rac import rac_bp
 from controller.user import user_bp
 
 # Load environment variables
@@ -75,7 +75,7 @@ if not os.path.exists('asset'):
 # Register blueprints
 app.register_blueprint(bpr_scrapping_bp)
 app.register_blueprint(bpr_lainnya_bp)
-app.register_blueprint(d_bp)
+app.register_blueprint(rac_bp)
 app.register_blueprint(user_bp)
 
 # Health check endpoint

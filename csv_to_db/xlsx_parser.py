@@ -21,6 +21,10 @@ def parse_bpr_lainnya_xlsx(file_path: str) -> List[Dict[str, Any]]:
         
         # Convert column names to snake_case if needed
         df.columns = [col.lower().replace(' ', '_') for col in df.columns]
+
+        # Convert 'sandi' column to string
+        if 'sandi' in df.columns:
+            df['sandi'] = df['sandi'].astype(str)
         
         # Initialize schema
         schema = BprLainnyaSchema()
@@ -49,7 +53,7 @@ def parse_bpr_lainnya_xlsx(file_path: str) -> List[Dict[str, Any]]:
     except Exception as e:
         raise ValueError(f"Error parsing XLSX file: {str(e)}")
 
-def parse_d_xlsx(file_path: str) -> List[Dict[str, Any]]:
+def parse_rac_xlsx(file_path: str) -> List[Dict[str, Any]]:
     """
     Parse D entity data from XLSX file and validate using schema
     
@@ -70,8 +74,8 @@ def parse_d_xlsx(file_path: str) -> List[Dict[str, Any]]:
         df.columns = [col.lower().replace(' ', '_') for col in df.columns]
         
         # Initialize schema
-        from dto.d_schema import DSchema
-        schema = DSchema()
+        from dto.rac_schema import DSchema
+        schema = RACSchema()
         validated_data = []
         
         # Process each row
