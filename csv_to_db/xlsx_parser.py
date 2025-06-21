@@ -1,6 +1,8 @@
 import pandas as pd
 from typing import List, Dict, Any
 from dto.bpr_lainnya_schema import BprLainnyaSchema
+from dto.rac_schema import RACSchema
+
 
 def parse_bpr_lainnya_xlsx(file_path: str) -> List[Dict[str, Any]]:
     """
@@ -68,13 +70,13 @@ def parse_rac_xlsx(file_path: str) -> List[Dict[str, Any]]:
     """
     try:
         # Read specific sheet from XLSX file
-        df = pd.read_excel(file_path, sheet_name='D')
+        df = pd.read_excel(file_path, sheet_name='rac')
         
         # Convert column names to snake_case if needed
         df.columns = [col.lower().replace(' ', '_') for col in df.columns]
         
         # Initialize schema
-        from dto.rac_schema import DSchema
+        from dto.rac_schema import RACSchema
         schema = RACSchema()
         validated_data = []
         
@@ -84,7 +86,7 @@ def parse_rac_xlsx(file_path: str) -> List[Dict[str, Any]]:
             data = row.to_dict()
             
             # Convert numeric values
-            numeric_fields = ['npl_nett', 'laba_tahun', 'laba_bulan', 'kap', 
+            numeric_fields = ['npl_net', 'laba_sebelum', 'laba_sekarang', 'kap', 
                             'kpmm', 'asset', 'roa', 'bopo']
             
             for field in numeric_fields:

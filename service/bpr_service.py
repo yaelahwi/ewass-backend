@@ -11,7 +11,7 @@ from csv_to_db.xlsx_parser import parse_bpr_lainnya_xlsx, parse_rac_xlsx
 UPLOAD_FOLDER = {
     'bpr_scrapping': "asset/bpr_scrapping",
     'bpr_lainnya': "asset/bpr_lainnya",
-    'd': "asset/d"
+    'rac': "asset/rac"
 }
 ALLOWED_EXTENSIONS_CSV = {'csv'}
 ALLOWED_EXTENSIONS_XLSX = {'xlsx'}
@@ -56,7 +56,7 @@ def process_bpr_scrapping(db: Session, file) -> Dict[str, str]:
 
         for data in data_list:
             # print("DATAA: ", data)
-            status=cek_kesehatan_bpr(data['npl_net'], data['laba_tahun_lalu'], data['laba_saat_ini'], data['kap'], data['kpmm'], data['asset_saat_ini'], data['roa'], data['bopo'])
+            status=cek_kesehatan_bpr(db,data['npl_net'], data['laba_tahun_lalu'], data['laba_saat_ini'], data['kap'], data['kpmm'], data['asset_saat_ini'], data['roa'], data['bopo'])
             print(status)
             bpr_scrapping = BprScrapping(**data)
             bpr_labeled = BprLabeled(**data, status=status)
@@ -129,6 +129,7 @@ def process_rac_data(db: Session, file) -> Dict[str, str]:
         raise ValueError("Invalid file type. Only XLSX files are allowed.")
     
     ensure_upload_folders()
+
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"{timestamp}_{secure_filename(file.filename)}"
     file_path = os.path.join(UPLOAD_FOLDER['rac'], filename)
@@ -150,42 +151,34 @@ def process_rac_data(db: Session, file) -> Dict[str, str]:
     finally:
         pass  # Keep the file in the folder
 
-def cek_kesehatan_bpr(npl, laba_sebelum, laba_sekarang, kap, kpmm, asset, roa, bopo) -> str:
+def cek_kesehatan_bpr(db, npl, laba_sebelum, laba_sekarang, kap, kpmm, asset, roa, bopo) -> str:
     total_skor = 0
+    rac_entity = get_rac_detail(db, 1)
 
-    # NPL < 5.00%
-    if npl < 0.05: 
+    if npl < rac_entity.npl_net:
         total_skor += 10
 
-    # Laba 21 >= 1
-    if laba_sebelum >= 1:
+    if laba_sebelum >= rac_entity.laba_sebelum:
         total_skor += 10
 
-    # Laba Jun 22 >= 1
-    if laba_sekarang >= 1:
+    if laba_sekarang >= rac_entity.laba_sekarang:
         total_skor += 10
 
-    # KAP < 10.35%
-    if kap < 0.1035: 
+    if kap < rac_entity.kap: 
         total_skor += 10
 
-    # KPMM >= 12.00%
-    if kpmm >= 0.12:
+    if kpmm >= rac_entity.kpmm:
         total_skor += 10
 
-    # Asset >= 1
-    if asset >= 1:
+    if asset >= rac_entity.asset:
         total_skor += 10
 
-    # ROA >= 0.10%
-    if roa >= 0.001: # 0.10% = 0.001 dalam bentuk desimal
+    if roa >= rac_entity.roa:
         total_skor += 10
 
-    # BOPO < 95.00%
-    if bopo < 0.95: # 95.00% = 0.95 dalam bentuk desimal
+    if bopo < rac_entity.bopo:
         total_skor += 10
 
-    # Penentuan Kesehatan
     if total_skor >= 80:
         return "SEHAT"
     else:

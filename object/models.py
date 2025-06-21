@@ -117,8 +117,8 @@ class RAC(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     npl_net = Column(Float, nullable=False)
-    laba_tahun = Column(Float, nullable=False)
-    laba_bulan = Column(Float, nullable=False)
+    laba_sebelum = Column(Float, nullable=False)
+    laba_sekarang = Column(Float, nullable=False)
     kap = Column(Float, nullable=False)
     kpmm = Column(Float, nullable=False)
     asset = Column(Float, nullable=False)

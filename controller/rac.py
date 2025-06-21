@@ -52,7 +52,7 @@ def uploarac_rac_data():
 @rac_bp.route('/', methods=['GET'])
 def get_all():
     """
-    Get all D entity records with pagination
+    Get all RAC entity records with pagination
     """
     try:
         page = request.args.get('page', default=1, type=int)
