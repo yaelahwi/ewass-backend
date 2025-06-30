@@ -2,6 +2,7 @@ import json, time, re, os, threading, logging, csv
 from queue import Queue
 from datetime import datetime
 from collections import OrderedDict
+from controller import user
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -19,7 +20,8 @@ from rich.tree import Tree
 from rich.live import Live
 from rich.table import Table
 from database import SessionLocal
-from object.models import BprLainnya
+from object.models import BprLainnya, FetchHistory
+from service.user_service import get_current_user
 
 # Configure logging to file instead of console
 os.makedirs('logs', exist_ok=True)
@@ -64,7 +66,7 @@ def data_writer_worker():
             'laba_saat_ini','laba_tahun_lalu','tabungan_saat_ini','tabungan_tahun_lalu','deposito_saat_ini',
             'deposito_tahun_lalu','penempatan_pada_bank_lain_saat_ini','penempatan_pada_bank_lain_tahun_lalu',
             'total_ekuitas','total_ekuitas_tahun_lalu','simpanan_dari_bank_lain_saat_ini',
-            'simpanan_dari_bank_lain_tahun_lalu','npl_net','kpmm','ldr','roa','kap','ppap',
+            'simpanan_dari_bank_lain_tahun_lalu','laba_desember_tahun_sebelum','npl_net','kpmm','ldr','roa','kap','ppap',
             'bopo','nim','cr',
             'direksi', 'dewan_komisaris'
         ]
@@ -137,7 +139,6 @@ def get_report_data(base_url, report_url, province_name, city_name, bank_name, y
         
         response = requests.get(report_url, timeout=30)
         response.raise_for_status()
-        # print(report_url)
          # Management data extraction
         direksi, komisaris ='', ''
         # Financial data extraction
@@ -162,7 +163,8 @@ def get_report_data(base_url, report_url, province_name, city_name, bank_name, y
                     'Deposito': {'current': '', 'previous': ''},
                     'Penempatan pada Bank Lain': {'current': '', 'previous': ''},
                     'Total Ekuitas': {'current': '', 'previous': ''},
-                    'Simpanan dari Bank Lain':{'current': '', 'previous': ''}
+                    'Simpanan dari Bank Lain':{'current': '', 'previous': ''},
+                    'Laba (Rugi) Desember Tahun Sebelum':''
                     }
        
         if 'BPK-901-000005' in report_url:
@@ -244,8 +246,30 @@ def get_report_data(base_url, report_url, province_name, city_name, bank_name, y
                     extracted_kap['Cash Ratio'] = clean_value(raw6)
                 elif 'nim' in label_clean.lower():
                     extracted_kap['NIM'] = clean_value(raw6)
+            
+        if 'BPK-901-000001' in report_url:
+            # print(report_url)
+            url_des = report_url.replace(f"Month=3", "Month=12")
+            url_des = url_des.replace(f"Year={datetime.now().year}", f"Year={datetime.now().year-1}")
+            # print(url_des)
+            if not url_des.startswith(('http://', 'https://')):
+                url_des = urllib.parse.urljoin(base_url, url_des)
+            
+            response_des = requests.get(url_des, timeout=30)
+            response_des.raise_for_status()
+            soup_des = BeautifulSoup(response_des.text, 'html.parser')
+            for tr in soup_des.find_all('tr', valign='top'):
+                tds = tr.find_all('td')
+                if len(tds) < 4: continue
+                label = tds[1].get_text(strip=True)
+                label_clean = re.sub(r'^[a-z0-9]\.\s*', '', label.replace('-/-', '')).strip()
+                
+                raw3 = tds[2].get_text(strip=True)
+                clean_raw3=clean_value(raw3)+"000"
+                if 'tahun berjalan' in label_clean.lower():
+                    extracted['Laba (Rugi) Desember Tahun Sebelum'] = clean_raw3
 
-                # print(extracted_kap)
+
         return extracted, extracted_kap, direksi, komisaris
     except Exception as e:
         print(f"Error occurred: {e}")
@@ -329,7 +353,6 @@ def process_bank(bank_info, progress, bank_task_id):
                     extracted_main, _, _, _ = get_report_data(base_url, report_url, province['ProvinceName'], 
                                                         city['CityName'], bank['BankName'], year, month['text'])
                     if extracted_main:
-                        # print("EXTRACTED: ", extracted_main)
                         data_found = True
                 
                 elif report_type == "BPK-901-000003":  # KAP financial data
@@ -362,6 +385,7 @@ def process_bank(bank_info, progress, bank_task_id):
                     extracted_main['Penempatan pada Bank Lain']['current'] or '0', extracted_main['Penempatan pada Bank Lain']['previous'] or '0',
                     extracted_main['Total Ekuitas']['current'] or '0', extracted_main['Total Ekuitas']['previous'] or '0',
                     extracted_main['Simpanan dari Bank Lain']['current'] or '0', extracted_main['Simpanan dari Bank Lain']['previous'] or '0',
+                    extracted_main['Laba (Rugi) Desember Tahun Sebelum'] or '0',
                     extracted_kap['NPL (neto)'] or '0',extracted_kap['KPMM'] or '0', extracted_kap['LDR'] or '0',extracted_kap['ROA'] or '0', 
                     extracted_kap['KAP'] or '0', extracted_kap['PPAP'] or '0', extracted_kap['BOPO'] or '0', 
                     extracted_kap['NIM'] or '0', extracted_kap['Cash Ratio'] or '0', direksi, komisaris
@@ -369,7 +393,7 @@ def process_bank(bank_info, progress, bank_task_id):
                 data_queue.put(row_data)
 
         except Exception as e:
-            print(e)
+            print("sini: ",e)
             pass
             
         # Update bank as completed
@@ -379,7 +403,7 @@ def process_bank(bank_info, progress, bank_task_id):
     except Exception as e:
         update_bank_progress(province['ProvinceName'], city['CityName'], bank['BankName'], completed=True)
         progress.update(bank_task_id, advance=1)
-        print(e)
+        print("disini: ",e)
 
 def get_bpr_lainnya_data():
     db = SessionLocal()
@@ -413,12 +437,18 @@ def get_bpr_lainnya_data():
         db.close()
 
 
-def process_bank_data(current_month, current_year, data_writer_thread):
+def process_bank_data(current_month, current_year, data_writer_thread, fetch_history_id):
     """Process bank data and collect financial information"""
     bank_data = get_bpr_lainnya_data()
+    db = SessionLocal()
+    fetch_record = db.query(FetchHistory).filter(FetchHistory.id == fetch_history_id).first()
     
     if not bank_data:
-        console.print("[red]Table 'bpr_lainnya' is empty, please insert data first")
+        console.print("Table 'bpr_lainnya' is empty, please insert data first")
+        if fetch_record:
+            fetch_record.status = "Failed"
+            db.commit()
+        db.close()
         return
     
     # Define months and years to process
@@ -429,66 +459,102 @@ def process_bank_data(current_month, current_year, data_writer_thread):
         {"value": "12", "text": "Desember", "index": 3}
     ]
     # month = months[(current_month//3)-1]
-    month = months[0]
-    year = 2022
+    month = months[3]
+    year = 2024
     
     # Setup global progress trackers
     global year_progress, month_progress
     
-    
-    # Process data year by year
-    with Progress(
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(bar_width=50),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TextColumn("[cyan]{task.completed}/{task.total}"),
-        TimeRemainingColumn(),
-        console=console,
-        transient=False,  # Keep the progress bars visible
-        refresh_per_second=4  # Update more frequently
-    ) as progress:
-        # Calculate total banks for this month/year
-        total_banks = sum(len(city['Bank']) for province in bank_data for city in province['City'])
-        bank_task = progress.add_task(f"{year} {month['text']}...", total=total_banks)
-        
-        # Build the task list
-        console.print(f"Preparing to process {total_banks} banks for {month['text']} {year}...")
-        
-        # Process banks sequentially
-        completed_banks = 0
-        for province in bank_data:
-            for city in province['City']:
-                for bank in city['Bank']:
-                    bank_info = (year, month, province, city, bank)
-                    process_bank(bank_info, progress, bank_task)
-                    completed_banks += 1
-                    progress.update(bank_task, completed=completed_banks, total=total_banks)
-                    if completed_banks == 3:
-                        break
-                if completed_banks == 3:
-                        break
-            if completed_banks == 3:
-                        break
-    # Signal threads to stop
-    data_queue.put(None)
-    data_writer_thread.join()
+    if fetch_record:
+        fetch_record.periode_pelaporan = f"{month['text']} {year}"
+        db.commit()
+    try:
+        # Process data year by year
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=50),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("[cyan]{task.completed}/{task.total}"),
+            TimeRemainingColumn(),
+            console=console,
+            transient=False,  # Keep the progress bars visible
+            refresh_per_second=4  # Update more frequently
+        ) as progress:
+            # Calculate total banks for this month/year
+            total_banks = sum(len(city['Bank']) for province in bank_data for city in province['City'])
+            bank_task = progress.add_task(f"{year} {month['text']}...", total=total_banks)
+            
+            # Build the task list
+            console.print(f"Preparing to process {total_banks} banks for {month['text']} {year}...")
+            
+            # Process banks sequentially
+            completed_banks = 0
+            for province in bank_data:
+                for city in province['City']:
+                    for bank in city['Bank']:
+                        bank_info = (year, month, province, city, bank)
+                        process_bank(bank_info, progress, bank_task)
+                        completed_banks += 1
+                        progress.update(bank_task, completed=completed_banks, total=total_banks)
+                        if completed_banks == 5:
+                            break
+                    if completed_banks == 5:
+                            break
+                if completed_banks == 5:
+                            break
+
+        # Signal threads to stop
+        data_queue.put(None)
+        data_writer_thread.join()
+        if fetch_record:
+                fetch_record.status = "Success"
+                db.commit()
+            
+    except Exception as e:
+        console.print(f"Error during bank data processing: {e}")
+        if fetch_record:
+            fetch_record.status = "Failed"
+            db.commit()
+        raise
+    finally:
+        db.close()
 
 
 def main(logging_thread, data_writer_thread):
+    db = SessionLocal()
+    fetch_history_record = None
+    user = get_current_user(db)
+    print(user)
     try:
         console.print("Starting OJK BPR Data Collection")
         current_month = datetime.now().month
         current_year = datetime.now().year
-        process_bank_data(current_month, current_year, data_writer_thread)
-        print("sudah selesai")
+        now = datetime.now()
+        fetch_history_record = FetchHistory(
+            fetch_date=now.date(),
+            fetch_time=now.time(),
+            periode="N/A",  # Will be updated later in process_bank_data
+            status="On Progress",
+            user=user.nama
+        )
+        db.add(fetch_history_record)
+        db.commit()
+        db.refresh(fetch_history_record)
+        process_bank_data(current_month, current_year, data_writer_thread, fetch_history_record.id)
         # Signal to stop logging
         log_queue.put(None)
         logging_thread.join()
         
         console.print("Data collection completed!")
     except Exception as e:
-        console.print(f"Error: {e}")
-        raise
+            console.print(f"Error in main: {e}")
+            # If an error occurs, set status to "Failed"
+            if fetch_history_record:
+                fetch_history_record.status = "Failed"
+                db.commit()
+            raise
+    finally:
+        db.close()
 
     
 

@@ -50,7 +50,7 @@ def parse_bpr_scrapping_csv(file_path: str) -> List[Dict[str, Any]]:
                               "laba_saat_ini","laba_tahun_lalu","tabungan_saat_ini","tabungan_tahun_lalu",
                               "deposito_saat_ini","deposito_tahun_lalu","penempatan_pada_bank_lain","penempatan_pada_bank_lain_tahun_lalu",
                               "total_ekuitas","total_ekuitas_tahun_lalu","simpanan_dari_bank_lain_saat_ini",
-                              "simpanan_dari_bank_lain_tahun_lalu","npl_net","kpmm","ldr","roa","kap","ppap",
+                              "simpanan_dari_bank_lain_tahun_lalu","laba_desember_tahun_sebelum","npl_net","kpmm","ldr","roa","kap","ppap",
                               "bopo","nim","cr"
                               ]
             
@@ -64,7 +64,7 @@ def parse_bpr_scrapping_csv(file_path: str) -> List[Dict[str, Any]]:
                         data[field] = float(data[field])
                     except (ValueError, TypeError):
                         raise ValueError(f"Invalid numeric value in field {field}")
-            
+            print("2")
             # Validate data against schema
             validated = schema.load(data)
             validated_data.append(validated)

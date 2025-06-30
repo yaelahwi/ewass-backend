@@ -33,6 +33,7 @@ class BprLabeledSchema(Schema):
     total_ekuitas_tahun_lalu = fields.Float(required=False, allow_none=True) # TAMBAHAN
     simpanan_dari_bank_lain_saat_ini = fields.Float(required=True)
     simpanan_dari_bank_lain_tahun_lalu = fields.Float(required=False)
+    laba_desember_tahun_sebelum = fields.Float(required=True)
     npl_net = fields.Float(required=True)
     kpmm = fields.Float(required=True)
     ldr = fields.Float(required=True)

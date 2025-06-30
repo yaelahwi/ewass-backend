@@ -4,7 +4,12 @@ from database import get_db
 from service.bpr_service import (
     process_bpr_lainnya,
     get_all_bpr_lainnya,
-    get_bpr_lainnya_detail
+    get_bpr_lainnya_detail,
+    get_bpr_plafon,
+    count_total_provinsi,
+    get_all_provinsi,
+    get_all_kota,
+    get_all_nama_bpr
 )
 from dto.bpr_lainnya_schema import BprLainnyaSchema
 
@@ -96,3 +101,72 @@ def get_detail(bpr_id: int):
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
 
+@bpr_lainnya_bp.route('/plafon/<string:bpr_id>', methods=['GET'])
+def get_bpr_potential_plafon(bpr_id: str):
+    db = next(get_db())
+    try:
+        kyd, tabungan, deposito, simpanan_bank_lain,dana_tersedia, kebutuhan_dana, plafon = get_bpr_plafon(db, bpr_id)
+
+        if kyd is None and tabungan is None and deposito is None and simpanan_bank_lain is None:
+            return jsonify({
+                "status": "error",
+                "message": "Data tidak ditemukan"
+            }), 404
+       
+
+
+        return jsonify({
+            "status": "success",
+            "data": {
+                "kyd_saat_ini": kyd,
+                "tabungan_saat_ini": tabungan,
+                "deposito_saat_ini": deposito,
+                "simpanan_dari_bank_lain_saat_ini": simpanan_bank_lain,
+                "dana_tersedia":dana_tersedia,
+                "kebutuhan_dana": kebutuhan_dana,
+                "plafon": plafon
+            }
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+@bpr_lainnya_bp.route('/count_total_provinsi', methods=['GET'])
+def route_count_total_provinsi():
+    db = next(get_db())
+    try:
+        total = count_total_provinsi(db)
+        return jsonify({"status": "success", "total_provinsi": total}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@bpr_lainnya_bp.route('/get_all_provinsi', methods=['GET'])
+def route_get_all_provinsi():
+    db = next(get_db())
+    try:
+        result = get_all_provinsi(db)
+        return jsonify({"status": "success", "provinsi": result}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@bpr_lainnya_bp.route('/get_all_kota', methods=['GET'])
+def route_get_all_kota():
+    db = next(get_db())
+    try:
+        result = get_all_kota(db)
+        return jsonify({"status": "success", "kota_kabupaten": result}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@bpr_lainnya_bp.route('/get_all_nama_bpr', methods=['GET'])
+def route_get_all_nama_bpr():
+    db = next(get_db())
+    try:
+        result = get_all_nama_bpr(db)
+        return jsonify({"status": "success", "nama_bpr": result}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500

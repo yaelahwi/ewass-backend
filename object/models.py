@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Date, Time
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -34,6 +34,7 @@ class BprScrapping(Base):
     total_ekuitas_tahun_lalu = Column(Float, nullable=False)
     simpanan_dari_bank_lain_saat_ini = Column(Float, nullable=False)
     simpanan_dari_bank_lain_tahun_lalu = Column(Float, nullable=False)
+    laba_desember_tahun_sebelum = Column(Float, nullable=False)
     npl_net = Column(Float, nullable=False)
     kpmm = Column(Float, nullable=False)
     ldr = Column(Float, nullable=False)
@@ -80,6 +81,7 @@ class BprLabeled(Base):
     total_ekuitas_tahun_lalu = Column(Float, nullable=False)
     simpanan_dari_bank_lain_saat_ini = Column(Float, nullable=False)
     simpanan_dari_bank_lain_tahun_lalu = Column(Float, nullable=False)
+    laba_desember_tahun_sebelum = Column(Float, nullable=False)
     npl_net = Column(Float, nullable=False)
     kpmm = Column(Float, nullable=False)
     ldr = Column(Float, nullable=False)
@@ -126,7 +128,7 @@ class RAC(Base):
     bopo = Column(Float, nullable=False)
 
     def __repr__(self):
-        return f"<D(id={self.id}, npl_net={self.npl_net})>"
+        return f"<RAC(id={self.id}, npl_net={self.npl_net})>"
 
 class User(Base):
     __tablename__ = "users"
@@ -137,4 +139,14 @@ class User(Base):
     nama = Column(String, nullable=False)
 
     def __repr__(self):
-        return f"<User(id={self.id}, email={self.email})>"
+        return f"<User(id={self.id}, email={self.email}, nama={self.nama})>"
+
+class FetchHistory(Base):
+    __tablename__ = 'fetch_history'
+
+    id = Column(Integer, primary_key=True, index=True)
+    fetch_date = Column(Date, default=datetime.now().date)
+    fetch_time = Column(Time, default=datetime.now().strftime('%H:%M:%S'))
+    periode = Column(String)
+    status = Column(String)
+    user = Column(String)

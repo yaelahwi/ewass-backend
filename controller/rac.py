@@ -4,7 +4,8 @@ from database import get_db
 from service.bpr_service import (
     process_rac_data,
     get_all_rac,
-    get_rac_detail
+    get_rac_detail,
+    update_rac_by_id
 )
 from dto.rac_schema import RACSchema
 
@@ -55,16 +56,19 @@ def get_all():
     Get all RAC entity records with pagination
     """
     try:
-        page = request.args.get('page', default=1, type=int)
-        per_page = request.args.get('per_page', default=10, type=int)
-        
         db = next(get_db())
-        paginaterac_data = get_all_rac(db, page=page, per_page=per_page)
+        rac_data = get_all_rac(db)
         
-        schema = RACSchema(many=True)
-        paginaterac_data['results'] = schema.dump(paginaterac_data['results'])
-        
-        return jsonify(paginaterac_data), 200
+        result = {"npl_net": rac_data[0].npl_net,
+                        "kap": rac_data[0].kap,
+                        "kpmm": rac_data[0].kpmm,
+                        "roa": rac_data[0].roa,
+                        "asset": rac_data[0].asset,
+                        "bopo": rac_data[0].bopo,
+                        "laba_sekarang": rac_data[0].laba_sekarang,
+                        "laba_sebelum": rac_data[0].laba_sebelum
+                        }
+        return jsonify(result), 200
         
     except Exception as e:
         return jsonify({"status": "error", "message": "Internal server error"}), 500
@@ -94,3 +98,21 @@ def get_detail(rac_id: int):
         
     except Exception as e:
         return jsonify({"status": "error", "message": "Internal server error"}), 500
+
+@rac_bp.route('/update_rac', methods=['PUT'])
+def route_update_rac():
+    db = next(get_db())
+    try:
+        update_data = request.json
+        updated = update_rac_by_id(db, update_data)
+
+        return jsonify({
+            "status": "success",
+            "message": "RAC updated successfully",
+            "data": updated
+        }), 200
+
+    except ValueError as ve:
+        return jsonify({"status": "error", "message": str(ve)}), 404
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500

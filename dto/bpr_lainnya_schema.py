@@ -5,7 +5,6 @@ def validate_phone(value):
     if value == '0':
         value = '000000'
     elif not re.match(r'^\d{5,16}$', str(value)):
-        print(value)
         raise ValidationError('Invalid phone number format. Must be between 5-16 digits.')
 
 def validate_email(value):

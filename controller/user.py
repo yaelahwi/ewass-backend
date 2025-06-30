@@ -11,7 +11,8 @@ from service.user_service import (
     create_user,
     get_all_users,
     get_user_by_id,
-    verify_user
+    verify_user,
+    get_current_user
 )
 
 user_bp = Blueprint('user', __name__, url_prefix='/user')
@@ -150,3 +151,17 @@ def get_detail(user_id: int):
         
     except Exception as e:
         return jsonify({"status": "error", "message": "Internal server error"}), 500
+    
+@user_bp.route('/me', methods=['GET'])
+@jwt_required()
+def protected_route():
+    db = next(get_db())
+    user = get_current_user(db)
+    
+    if not user:
+        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+
+    return jsonify({
+        "status": "success",
+        "name" : user.nama
+    }), 200

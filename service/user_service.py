@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
+from flask_jwt_extended import get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from object.models import User
 from dto.user_schema import UserSchema, UserResponseSchema
@@ -99,3 +100,11 @@ def verify_user(db: Session, email: str, password: str) -> Optional[Dict]:
         schema = UserResponseSchema()
         return schema.dump(user)
     return None
+
+def get_current_user(db: Session):
+    identity = get_jwt_identity()
+    if not identity:
+        return None
+    result = db.query(User).filter(User.id == identity).first()
+    print(result)
+    return db.query(User).filter(User.id == identity).first()

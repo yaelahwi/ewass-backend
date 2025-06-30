@@ -9,13 +9,14 @@ from controller.bpr_scrapping import bpr_scrapping_bp
 from controller.bpr_lainnya import bpr_lainnya_bp
 from controller.rac import rac_bp
 from controller.user import user_bp
+from flask_cors import CORS
 
 # Load environment variables
 load_dotenv()
 
 # Create Flask application
 app = Flask(__name__)
-
+CORS(app, supports_credentials=True, origins=["http://localhost:8000"])
 # JWT Configuration
 app.config["JWT_SECRET_KEY"] = os.getenv('JWT_SECRET_KEY', 'your-super-secret-key')  # Change this in production!
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = 24 * 60 * 60  # 24 hours
