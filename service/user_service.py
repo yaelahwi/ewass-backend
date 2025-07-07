@@ -25,7 +25,7 @@ def create_user(db: Session, user_data: Dict) -> Dict:
         validated_data = schema.load(user_data)
         
         # Check if user already exists
-        existing_user = db.query(User).filter(User.email == validated_data['email']).first()
+        existing_user = db.query(User).filter(User.uid == validated_data['uid']).first()
         if existing_user:
             raise ValueError("Email already registered")
         
@@ -42,7 +42,7 @@ def create_user(db: Session, user_data: Dict) -> Dict:
         response_schema = UserResponseSchema()
         return {
             "status": "success",
-            "uid": user.id,
+            "uid": user.uid,
             "user": response_schema.dump(user)
         }
         
@@ -77,13 +77,13 @@ def get_user_by_id(db: Session, user_id: int) -> Optional[Dict]:
     Returns:
         Optional[Dict]: User data if found, None otherwise
     """
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.uid == user_id).first()
     if user:
         schema = UserResponseSchema()
         return schema.dump(user)
     return None
 
-def verify_user(db: Session, email: str, password: str) -> Optional[Dict]:
+def verify_user(db: Session, uid: str, password: str) -> Optional[Dict]:
     """
     Verify user credentials
     
@@ -95,7 +95,7 @@ def verify_user(db: Session, email: str, password: str) -> Optional[Dict]:
     Returns:
         Optional[Dict]: User data if verification successful, None otherwise
     """
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.uid == uid).first()
     if user and check_password_hash(user.password, password):
         schema = UserResponseSchema()
         return schema.dump(user)
@@ -105,6 +105,7 @@ def get_current_user(db: Session):
     identity = get_jwt_identity()
     if not identity:
         return None
-    result = db.query(User).filter(User.id == identity).first()
+    print("IDENTITY: ", identity)
+    result = db.query(User).filter(User.uid == identity).first()
     print(result)
-    return db.query(User).filter(User.id == identity).first()
+    return result

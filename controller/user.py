@@ -27,7 +27,7 @@ def register():
         if not data:
             return jsonify({"status": "error", "message": "No data provided"}), 400
             
-        required_fields = ['email', 'password', 'nama']
+        required_fields = ['uid','email', 'password', 'nama']
         for field in required_fields:
             if field not in data:
                 return jsonify({
@@ -35,10 +35,10 @@ def register():
                     "message": f"Missing required field: {field}"
                 }), 400
                 
-        db = next(get_db())
-        result = create_user(db, data)
-        return jsonify(result), 201
-        
+        with get_db() as db:
+            result = create_user(db, data)
+            return jsonify(result), 201
+            
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
@@ -54,37 +54,37 @@ def login():
         if not data:
             return jsonify({"status": "error", "message": "No data provided"}), 400
             
-        email = data.get('email')
+        uid = data.get('uid')
         password = data.get('password')
         
-        if not email or not password:
+        if not uid or not password:
             return jsonify({
                 "status": "error",
-                "message": "Email and password are required"
+                "message": "UID and password are required"
             }), 400
             
-        db = next(get_db())
-        user = verify_user(db, email, password)
-        
-        if user:
-            # Generate access token with fresh=True for enhanced security
-            access_token = create_access_token(
-                identity=str(user['id']),
-                fresh=True
-            )
+        with get_db() as db:
+            user = verify_user(db, uid, password)
             
-            return jsonify({
-                "status": "success",
-                "message": "Login successful",
-                "access_token": access_token,
-                "token_type": "Bearer",
-                "user": user
-            }), 200
-        else:
-            return jsonify({
-                "status": "error",
-                "message": "Invalid email or password"
-            }), 401
+            if user:
+                # Generate access token with fresh=True for enhanced security
+                access_token = create_access_token(
+                    identity=str(user['uid']),
+                    fresh=True
+                )
+                
+                return jsonify({
+                    "status": "success",
+                    "message": "Login successful",
+                    "access_token": access_token,
+                    "token_type": "Bearer",
+                    "user": user
+                }), 200
+            else:
+                return jsonify({
+                    "status": "error",
+                    "message": "Invalid email or password"
+                }), 401
             
     except Exception as e:
         return jsonify({"status": "error", "message": "Internal server error"}), 500
@@ -98,15 +98,15 @@ def get_all():
         skip = request.args.get('skip', default=0, type=int)
         limit = request.args.get('limit', default=100, type=int)
         
-        db = next(get_db())
-        users = get_all_users(db, skip, limit)
-        
-        return jsonify({
-            "status": "success",
-            "data": users,
-            "count": len(users)
-        }), 200
-        
+        with get_db() as db:
+            users = get_all_users(db, skip, limit)
+            
+            return jsonify({
+                "status": "success",
+                "data": users,
+                "count": len(users)
+            }), 200
+            
     except Exception as e:
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
@@ -135,19 +135,19 @@ def get_detail(user_id: int):
     Get user detail by ID
     """
     try:
-        db = next(get_db())
-        user = get_user_by_id(db, user_id)
-        
-        if not user:
-            return jsonify({
-                "status": "error",
-                "message": f"User with ID {user_id} not found"
-            }), 404
+        with get_db() as db:
+            user = get_user_by_id(db, user_id)
             
-        return jsonify({
-            "status": "success",
-            "data": user
-        }), 200
+            if not user:
+                return jsonify({
+                    "status": "error",
+                    "message": f"User with ID {user_id} not found"
+                }), 404
+                
+            return jsonify({
+                "status": "success",
+                "data": user
+            }), 200
         
     except Exception as e:
         return jsonify({"status": "error", "message": "Internal server error"}), 500
@@ -155,13 +155,13 @@ def get_detail(user_id: int):
 @user_bp.route('/me', methods=['GET'])
 @jwt_required()
 def protected_route():
-    db = next(get_db())
-    user = get_current_user(db)
-    
-    if not user:
-        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+    with get_db() as db:
+        user = get_current_user(db)
+        
+        if not user:
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
-    return jsonify({
-        "status": "success",
-        "name" : user.nama
-    }), 200
+        return jsonify({
+            "status": "success",
+            "name" : user.nama
+        }), 200

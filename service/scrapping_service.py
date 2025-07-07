@@ -21,6 +21,7 @@ from rich.live import Live
 from rich.table import Table
 from database import SessionLocal
 from object.models import BprLainnya, FetchHistory
+from service.bpr_service import get_fetch_history_id
 from service.user_service import get_current_user
 
 # Configure logging to file instead of console
@@ -250,7 +251,9 @@ def get_report_data(base_url, report_url, province_name, city_name, bank_name, y
         if 'BPK-901-000001' in report_url:
             # print(report_url)
             url_des = report_url.replace(f"Month=3", "Month=12")
-            url_des = url_des.replace(f"Year={datetime.now().year}", f"Year={datetime.now().year-1}")
+            # url_des = url_des.replace(f"Year={datetime.now().year}", f"Year={datetime.now().year-1}")
+            url_des = url_des.replace(f"Year=2023", f"Year=2022")
+
             # print(url_des)
             if not url_des.startswith(('http://', 'https://')):
                 url_des = urllib.parse.urljoin(base_url, url_des)
@@ -441,7 +444,7 @@ def process_bank_data(current_month, current_year, data_writer_thread, fetch_his
     """Process bank data and collect financial information"""
     bank_data = get_bpr_lainnya_data()
     db = SessionLocal()
-    fetch_record = db.query(FetchHistory).filter(FetchHistory.id == fetch_history_id).first()
+    fetch_record = get_fetch_history_id(db, fetch_history_id)
     
     if not bank_data:
         console.print("Table 'bpr_lainnya' is empty, please insert data first")
@@ -458,15 +461,15 @@ def process_bank_data(current_month, current_year, data_writer_thread, fetch_his
         {"value": "9", "text": "September", "index": 2},
         {"value": "12", "text": "Desember", "index": 3}
     ]
-    # month = months[(current_month//3)-1]
-    month = months[3]
-    year = 2024
+    month = months[(current_month//3)-1]
+    print("MONTH ", month)
+    year = datetime.now().year
     
     # Setup global progress trackers
     global year_progress, month_progress
-    
+
     if fetch_record:
-        fetch_record.periode_pelaporan = f"{month['text']} {year}"
+        fetch_record.periode = f"{month['text']} {year}"
         db.commit()
     try:
         # Process data year by year
@@ -502,14 +505,13 @@ def process_bank_data(current_month, current_year, data_writer_thread, fetch_his
                             break
                 if completed_banks == 5:
                             break
-
         # Signal threads to stop
         data_queue.put(None)
         data_writer_thread.join()
         if fetch_record:
                 fetch_record.status = "Success"
-                db.commit()
-            
+                fetch_record.end_time = datetime.now()
+                db.commit()  
     except Exception as e:
         console.print(f"Error during bank data processing: {e}")
         if fetch_record:
@@ -529,10 +531,9 @@ def main(logging_thread, data_writer_thread):
         console.print("Starting OJK BPR Data Collection")
         current_month = datetime.now().month
         current_year = datetime.now().year
-        now = datetime.now()
         fetch_history_record = FetchHistory(
-            fetch_date=now.date(),
-            fetch_time=now.time(),
+            start_time=datetime.now(),
+            end_time=None,
             periode="N/A",  # Will be updated later in process_bank_data
             status="On Progress",
             user=user.nama

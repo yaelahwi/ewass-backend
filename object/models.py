@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Dat
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
+import uuid
 
 class BprScrapping(Base):
     __tablename__ = "bpr_scrapping"
@@ -134,6 +135,7 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
+    uid = Column(String, nullable=False, unique=True, default=uuid.uuid4().hex) #
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
     nama = Column(String, nullable=False)
@@ -145,8 +147,11 @@ class FetchHistory(Base):
     __tablename__ = 'fetch_history'
 
     id = Column(Integer, primary_key=True, index=True)
-    fetch_date = Column(Date, default=datetime.now().date)
-    fetch_time = Column(Time, default=datetime.now().strftime('%H:%M:%S'))
+    start_time = Column(DateTime, default=datetime.now())
+    end_time = Column(DateTime, nullable=True)
     periode = Column(String)
     status = Column(String)
     user = Column(String)
+
+    def __repr__(self):
+        return f"<FetchHistory(id={self.id}, periode={self.periode})>"

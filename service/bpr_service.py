@@ -1,3 +1,4 @@
+import math
 import os
 from typing import List, Dict, Any, Optional, Tuple
 from werkzeug.utils import secure_filename
@@ -5,7 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from utils.pagination import paginate
 from sqlalchemy import func, distinct
-from object.models import BprScrapping, BprLainnya, RAC, BprLabeled
+from object.models import BprScrapping, BprLainnya, RAC, BprLabeled, FetchHistory
 from csv_to_db.csv_parser import parse_bpr_scrapping_csv
 from csv_to_db.xlsx_parser import parse_bpr_lainnya_xlsx, parse_rac_xlsx
 
@@ -48,7 +49,6 @@ def process_bpr_scrapping(db: Session, file) -> Dict[str, str]:
     
     ensure_upload_folders()
     print("FILEE ",file)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_path = file.name #ini kalau abis scrapping langsung upload
     # file_path = file #ini kalau upload manual
     
@@ -184,28 +184,68 @@ def cek_kesehatan_bpr(db, npl, laba_desember_tahun_sebelum, laba_sekarang, kap, 
     else:
         return "TIDAK SEHAT"
 
+def update_bpr_status_by_rac(db: Session):
+    rac = get_rac_detail(db, 1)
+    if not rac:
+        raise ValueError("RAC not found.")
+
+    bprs = db.query(BprLabeled).all()
+    updated_count = 0
+
+    for bpr in bprs:
+        skor = 0
+
+        # Penilaian berdasarkan RAC
+        if bpr.npl_net is not None and bpr.npl_net < rac.npl_net:
+            skor += 10
+        if bpr.laba_desember_tahun_sebelum is not None and bpr.laba_desember_tahun_sebelum >= rac.laba_sebelum:
+            skor += 10
+        if bpr.laba_saat_ini is not None and bpr.laba_saat_ini >= rac.laba_sekarang:
+            skor += 10
+        if bpr.kap is not None and bpr.kap < rac.kap:
+            skor += 10
+        if bpr.kpmm is not None and bpr.kpmm >= rac.kpmm:
+            skor += 10
+        if bpr.asset_saat_ini is not None and bpr.asset_saat_ini >= rac.asset:
+            skor += 10
+        if bpr.roa is not None and bpr.roa >= rac.roa:
+            skor += 10
+        if bpr.bopo is not None and bpr.bopo < rac.bopo:
+            skor += 10
+
+        # Tentukan status
+        new_status = "SEHAT" if skor >= 80 else "TIDAK SEHAT"
+
+        # Update jika berubah
+        if bpr.status != new_status:
+            bpr.status = new_status
+            updated_count += 1
+
+    db.commit()
+    return {"status": "success", "updated": updated_count}
 
 # Query functions
 def get_all_bpr_scrapping(db: Session, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
     query = db.query(BprScrapping)
     return paginate(query, page=page, per_page=per_page)
 
-def get_bpr_scrapping_detail(db: Session, bpr_id: int) -> Optional[BprScrapping]:
+def get_bpr_scrapping_detail(db: Session, bpr_id: str) -> Optional[BprScrapping]:
     return db.query(BprScrapping).filter(BprScrapping.sandi == bpr_id).first()
 
 def get_all_bpr_labeled(db: Session, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
     query = db.query(BprLabeled)
     return paginate(query, page=page, per_page=per_page)
 
-def get_bpr_labeled_detail(db: Session, bpr_id: int) -> Optional[BprLabeled]:
+def get_bpr_labeled_detail(db: Session, bpr_id: str) -> Optional[BprLabeled]:
     return db.query(BprLabeled).filter(BprLabeled.id == bpr_id).first()
 
 def get_all_bpr_lainnya(db: Session, page: int = 1, per_page: int = 10) -> Dict[str, Any]:
     query = db.query(BprLainnya)
     return paginate(query, page=page, per_page=per_page)
 
-def get_bpr_lainnya_detail(db: Session, bpr_id: int) -> Optional[BprLainnya]:
-    return db.query(BprLainnya).filter(BprLainnya.id == bpr_id).first()
+def get_bpr_lainnya_detail(db: Session, bpr_id: str) -> Optional[BprLainnya]:
+    query = db.query(BprLainnya).filter(BprLainnya.sandi == str(bpr_id)).first()
+    return query
 
 def get_all_rac(db: Session) -> Dict[str, Any]:
     query = db.query(RAC).all()
@@ -223,8 +263,8 @@ def get_bpr_plafon(db: Session, bpr_id: str) -> Optional[Tuple[Any, Any, Any, An
         BprLabeled.deposito_saat_ini,
         BprLabeled.simpanan_dari_bank_lain_saat_ini
     ).filter(BprLabeled.sandi == bpr_id,
-             BprLabeled.tahun == 2025,
-             BprLabeled.bulan == 'Maret').first() #nanti ini diubah
+             BprLabeled.tahun == tahun,
+             BprLabeled.bulan == 'Desember').first() #plafon per desember tahun sebelum
 
     kebutuhan_dana = kyd/0.95
     dana_tersedia = tabungan + deposito + simpanan_bank_lain
@@ -233,14 +273,14 @@ def get_bpr_plafon(db: Session, bpr_id: str) -> Optional[Tuple[Any, Any, Any, An
 
 def get_top_bpr_by_asset (db: Session) -> Optional[Tuple[Any, Any, Any, Any]]:
     result = (db.query(BprLabeled.nama, BprLabeled.asset_saat_ini, BprLabeled.nama_kota)
-              .filter(BprLabeled.asset_saat_ini != None, BprLabeled.tahun == datetime.now().year)
+              .filter(BprLabeled.asset_saat_ini != None, BprLabeled.tahun == datetime.now().year, BprLabeled.bulan == 'Maret')
               .order_by(BprLabeled.asset_saat_ini.desc())
               .limit(5))
     return result
 
 def get_top_bpr_by_npl (db: Session) -> Optional[Tuple[Any, Any, Any, Any]]:
     result = (db.query(BprLabeled.nama, BprLabeled.npl_net, BprLabeled.nama_kota)
-              .filter(BprLabeled.npl_net != None, BprLabeled.tahun == datetime.now().year)
+              .filter(BprLabeled.npl_net != None, BprLabeled.tahun == datetime.now().year, BprLabeled.bulan == 'Maret')
               .order_by(BprLabeled.npl_net.asc())
               .limit(5))
     return result
@@ -252,6 +292,7 @@ def get_filtered_bpr_list(
     nama_provinsi: str,
     nama_kota: str,
     nama: str,
+    status: str,
     page: int,
     per_page: int
 ) -> Tuple[List[BprLabeled], int]:
@@ -270,21 +311,48 @@ def get_filtered_bpr_list(
         query = query.filter(BprLabeled.nama_kota.ilike(f"%{nama_kota}%"))
     if nama:
         query = query.filter(BprLabeled.nama.ilike(f"%{nama}%"))
+    if status:
+        query = query.filter(BprLabeled.status==status)
 
     # print(query)
     total = query.count()
     results = query.offset((page - 1) * per_page).limit(per_page).all()
+    total_page = math.ceil(total/per_page)
+    print(total)
+    print(total_page)
 
     return results, total
 
+def delete_bpr_labeled_by_periode(db: Session, tahun: int, bulan: str) -> dict:
+    try:
+        deleted = db.query(BprLabeled).filter(
+            BprLabeled.tahun == tahun,
+            BprLabeled.bulan == bulan
+        ).delete(synchronize_session=False)
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "deleted_count": deleted,
+            "message": f"{deleted} records deleted for {bulan} {tahun}"
+        }
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "status": "error",
+            "message": f"Gagal menghapus data: {str(e)}"
+        }
+
 def count_total_bpr(db: Session) -> int:
-    return db.query(BprLabeled).filter(BprLabeled.tahun==2025, BprLabeled.bulan=='Maret').count()
+    return db.query(BprLabeled).filter(BprLabeled.tahun==datetime.now().year, BprLabeled.bulan=='Maret').count()
 
 def count_bpr_sehat(db: Session) -> int:
-    return db.query(BprLabeled).filter(BprLabeled.tahun==2025, BprLabeled.bulan=='Maret', BprLabeled.status=='SEHAT').count()
+    return db.query(BprLabeled).filter(BprLabeled.tahun==datetime.now().year, BprLabeled.bulan=='Maret', BprLabeled.status=='SEHAT').count()
 
 def count_bpr_tidak_sehat(db: Session) -> int:
-    return db.query(BprLabeled).filter(BprLabeled.tahun==2025, BprLabeled.bulan=='Maret', BprLabeled.status=='TIDAK SEHAT').count()
+    return db.query(BprLabeled).filter(BprLabeled.tahun==datetime.now().year, BprLabeled.bulan=='Maret', BprLabeled.status=='TIDAK SEHAT').count()
 
 def count_total_provinsi(db: Session) -> int:
     return db.query(func.count(func.distinct(BprLainnya.provinsi))).scalar()
@@ -293,12 +361,23 @@ def get_all_provinsi(db: Session):
     results = db.query(distinct(BprLainnya.provinsi)).all()
     return [row[0] for row in results] 
 
-def get_all_kota(db: Session):
-    results = db.query(distinct(BprLainnya.kota_kabupaten)).all()
-    return [row[0] for row in results] 
+def get_all_kota(db, provinsi: str = None):
+    query = db.query(distinct(BprLainnya.kota_kabupaten))
+    
+    if provinsi:
+        query = query.filter(BprLainnya.provinsi == provinsi)
+    
+    results = query.all()
+    return [row[0] for row in results]
 
-def get_all_nama_bpr(db: Session):
-    results = db.query(distinct(BprLainnya.nama_bpr)).all()
+def get_all_nama_bpr(db: Session, provinsi: str = None, kota_kabupaten: str = None):
+    query = db.query(distinct(BprLainnya.nama_bpr))
+    if provinsi:
+        query = query.filter(BprLainnya.provinsi == provinsi)
+    if kota_kabupaten:
+        query = query.filter(BprLainnya.kota_kabupaten == kota_kabupaten)
+
+    results = query.all()
     return [row[0] for row in results] 
 
 def get_bpr_asset(db: Session, bpr_id: str):
@@ -323,7 +402,7 @@ def update_rac_by_id(db: Session, update_data: dict) -> dict:
 
     db.commit()
     db.refresh(rac)
-
+    update_bpr_status_by_rac(db)
     return {
         "npl_net": rac.npl_net,
         "kap": rac.kap,
@@ -334,3 +413,9 @@ def update_rac_by_id(db: Session, update_data: dict) -> dict:
         "laba_sekarang": rac.laba_sekarang,
         "asset": rac.asset
     }
+
+def get_fetch_history_all(db: Session):
+    return db.query(FetchHistory).order_by(FetchHistory.start_time.desc()).all()
+
+def get_fetch_history_id(db: Session, fetch_history_id: int):
+    return db.query(FetchHistory).filter(FetchHistory.id == fetch_history_id).first()

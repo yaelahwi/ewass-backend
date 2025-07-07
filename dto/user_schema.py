@@ -13,6 +13,7 @@ def validate_password(value):
 
 class UserSchema(Schema):
     id = fields.Int(dump_only=True)
+    uid = fields.Str(required=True, validate=validate.Length(min=1))
     email = fields.Email(required=True)
     password = fields.Str(required=True, validate=validate_password, load_only=True)
     nama = fields.Str(required=True, validate=validate.Length(min=1))
@@ -22,6 +23,7 @@ class UserSchema(Schema):
 
 class UserResponseSchema(Schema):
     id = fields.Int(required=True)
+    uid = fields.Str(required=True, validate=validate.Length(min=1))
     email = fields.Email(required=True)
     nama = fields.Str(required=True)
 

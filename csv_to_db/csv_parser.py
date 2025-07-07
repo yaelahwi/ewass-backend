@@ -64,7 +64,7 @@ def parse_bpr_scrapping_csv(file_path: str) -> List[Dict[str, Any]]:
                         data[field] = float(data[field])
                     except (ValueError, TypeError):
                         raise ValueError(f"Invalid numeric value in field {field}")
-            print("2")
+
             # Validate data against schema
             validated = schema.load(data)
             validated_data.append(validated)
